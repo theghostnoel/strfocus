@@ -1,0 +1,6 @@
+{
+  "name": "English Flashcard Group Streak",
+  "description": "Website học từ vựng tiếng Anh qua flashcard, có hệ thống tài khoản, đồng bộ dữ liệu thời gian thực và giữ chuỗi học tập theo nhóm.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
