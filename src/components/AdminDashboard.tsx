@@ -972,13 +972,25 @@ export default function AdminDashboard({ user, communitySettings }: AdminDashboa
                 <tbody className="divide-y divide-slate-800/60 text-xs">
                   {usersList.map((usr) => (
                     <tr key={usr.uid} className="hover:bg-slate-950/20 transition-colors">
-                      <td className="py-4 px-6 font-bold text-white">{usr.displayName}</td>
-                      <td className="py-4 px-6 text-slate-300 font-mono">{usr.email}</td>
+                      <td className="py-4 px-6 flex items-center gap-3">
+                        {usr.avatarUrl ? (
+                          <img src={usr.avatarUrl} alt="avatar" className="w-8 h-8 rounded-full object-cover border border-slate-700/50" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center font-bold text-xs uppercase">
+                            {(usr.displayName || usr.username || "H").charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-bold text-white text-sm">{usr.displayName || usr.username || "Học sinh"}</div>
+                          {usr.username && <div className="text-[10px] text-slate-500 font-mono">@{usr.username}</div>}
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-slate-300 font-mono">{usr.email || "N/A"}</td>
                       <td className="py-4 px-6">
                         <span className={`py-0.5 px-2.5 rounded-full text-[10px] font-bold font-mono tracking-wide ${
-                          usr.role === "admin" ? "bg-rose-500/15 text-rose-400 border border-rose-500/25" : "bg-indigo-500/15 text-indigo-400 border border-indigo-500/25"
+                          (usr.role || "student") === "admin" ? "bg-rose-500/15 text-rose-400 border border-rose-500/25" : "bg-indigo-500/15 text-indigo-400 border border-indigo-500/25"
                         }`}>
-                          {usr.role.toUpperCase()}
+                          {(usr.role || "student").toUpperCase()}
                         </span>
                       </td>
                       <td className="py-4 px-6 font-mono text-slate-400">

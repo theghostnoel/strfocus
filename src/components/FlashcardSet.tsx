@@ -29,9 +29,23 @@ export default function FlashcardSet({ user, vocabularySet, onBack }: FlashcardS
   const [nextRoundWords, setNextRoundWords] = useState<Word[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [useInstantFlip, setUseInstantFlip] = useState(false);
   const [todayStr] = useState(() => getVNDateString());
   const [showCelebration, setShowCelebration] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(() => getVNTimeUntilMidnight());
+
+  const currentWord = roundWords[currentIndex];
+
+  // Reset flipped state immediately and seamlessly on card change
+  useEffect(() => {
+    if (currentWord) {
+      setIsFlipped(false);
+      const timer = setTimeout(() => {
+        setUseInstantFlip(false);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [currentWord?.id]);
 
   // Countdown clock until midnight (Vietnam time)
   useEffect(() => {
@@ -93,8 +107,6 @@ export default function FlashcardSet({ user, vocabularySet, onBack }: FlashcardS
     }
   }, [roundWords, currentIndex]);
 
-  const currentWord = roundWords[currentIndex];
-
   const handleFlip = () => {
     setIsFlipped(!isFlipped);
   };
@@ -103,6 +115,7 @@ export default function FlashcardSet({ user, vocabularySet, onBack }: FlashcardS
   const handleRemembered = async () => {
     if (!currentWord) return;
 
+    setUseInstantFlip(true);
     setIsFlipped(false);
     
     // Add to completed words list
@@ -169,6 +182,7 @@ export default function FlashcardSet({ user, vocabularySet, onBack }: FlashcardS
   const handleNotRemembered = async () => {
     if (!currentWord) return;
 
+    setUseInstantFlip(true);
     setIsFlipped(false);
 
     // Save to Firestore incorrectWords
@@ -358,8 +372,9 @@ export default function FlashcardSet({ user, vocabularySet, onBack }: FlashcardS
             {/* Flashcard container */}
             <div className="h-80 w-full perspective-1000 mb-8 cursor-pointer" onClick={handleFlip}>
               <motion.div
-                className="relative h-full w-full rounded-3xl transition-all duration-500 preserve-3d"
+                className="relative h-full w-full rounded-3xl preserve-3d"
                 animate={{ rotateY: isFlipped ? 180 : 0 }}
+                transition={{ duration: useInstantFlip ? 0 : 0.4, ease: "easeInOut" }}
                 style={{ transformStyle: "preserve-3d" }}
               >
                 {/* Front Side */}

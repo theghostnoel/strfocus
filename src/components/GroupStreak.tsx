@@ -44,6 +44,7 @@ import {
   Smile
 } from "lucide-react";
 import { LocalDB } from "../utils/localDb";
+import { getUsersByUids } from "../services/authService";
 
 interface GroupStreakProps {
   user: AppUser;
@@ -89,6 +90,7 @@ export default function GroupStreak({ user }: GroupStreakProps) {
   const [group, setGroup] = useState<Group | null>(null);
   const [loadingGroup, setLoadingGroup] = useState(true);
   const [dailyStatus, setDailyStatus] = useState<GroupDailyStatus | null>(null);
+  const [memberProfiles, setMemberProfiles] = useState<{[uid: string]: AppUser}>({});
   const [todayStr] = useState(() => getVNDateString());
   const [timeRemaining, setTimeRemaining] = useState(() => getVNTimeUntilMidnight());
 
@@ -230,6 +232,35 @@ export default function GroupStreak({ user }: GroupStreakProps) {
       unsubscribeDaily();
     };
   }, [activeGroupId, todayStr]);
+
+  // Fetch profiles of group members whenever the memberIds change
+  useEffect(() => {
+    if (!group?.memberIds || group.memberIds.length === 0) {
+      setMemberProfiles({});
+      return;
+    }
+
+    let isMounted = true;
+    const fetchProfiles = async () => {
+      try {
+        const profiles = await getUsersByUids(group.memberIds);
+        if (isMounted) {
+          const mapping: { [uid: string]: AppUser } = {};
+          profiles.forEach(p => {
+            mapping[p.uid] = p;
+          });
+          setMemberProfiles(mapping);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch group member profiles:", err);
+      }
+    };
+
+    fetchProfiles();
+    return () => {
+      isMounted = false;
+    };
+  }, [group?.memberIds]);
 
   // Sync current user's today's study progress to Firestore dailyStatus on dashboard load/updates
   useEffect(() => {
@@ -950,8 +981,8 @@ export default function GroupStreak({ user }: GroupStreakProps) {
                     {group.memberIds.map((mId) => {
                       // Get progress details from today's daily status
                       const mProgress = dailyStatus?.memberProgress?.[mId];
-                      const displayName = mProgress?.displayName || (mId === user.uid ? user.displayName : "Đang tải...");
-                      const email = mProgress?.email || (mId === user.uid ? user.email : "");
+                      const displayName = mProgress?.displayName || memberProfiles[mId]?.displayName || (mId === user.uid ? user.displayName : "Đang tải...");
+                      const email = mProgress?.email || memberProfiles[mId]?.email || (mId === user.uid ? user.email : "");
                       const isCompleted = mProgress?.isCompleted || false;
                       const completedPercent = mProgress?.completedPercent || 0;
                       const isNewMemberToday = mProgress?.joinedDate === todayStr;
