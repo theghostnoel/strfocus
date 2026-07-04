@@ -16,10 +16,42 @@ import { Subject, VocabularySet, Progress, Word } from "../types";
 import { updateGroupMemberProgress } from "./groupService";
 import { LocalDB } from "../utils/localDb";
 
+let defaultSubjectsInitialized = false;
+
+async function ensureDefaultSubjectsInFirestore() {
+  if (defaultSubjectsInitialized) return;
+  
+  const INITIAL_SUBJECTS = [
+    { id: "subj_eng", name: "Tiếng Anh", isActive: true },
+    { id: "subj_math", name: "Toán học", isActive: true },
+    { id: "subj_geo", name: "Địa lý", isActive: true }
+  ];
+
+  try {
+    const promises = INITIAL_SUBJECTS.map(async (sub) => {
+      const subjRef = doc(db, "subjects", sub.id);
+      const snap = await getDoc(subjRef);
+      if (!snap.exists()) {
+        await setDoc(subjRef, {
+          name: sub.name,
+          isActive: sub.isActive
+        });
+      }
+    });
+    await Promise.all(promises);
+    defaultSubjectsInitialized = true;
+  } catch (err) {
+    console.warn("Failed to ensure default subjects in Firestore:", err);
+  }
+}
+
 /**
  * Subscribes to all subjects
  */
 export function subscribeToSubjects(callback: (subjects: Subject[]) => void) {
+  // Ensure default subjects are present in Firestore asynchronously
+  ensureDefaultSubjectsInFirestore();
+
   // Send local storage cached subjects first
   const localSubjects = LocalDB.getSubjects();
   callback(localSubjects);
