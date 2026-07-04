@@ -81,7 +81,8 @@ export async function createGroup(name: string, subjectId: string, ownerId: stri
           displayName: ownerName,
           email: ownerEmail,
           isCompleted: false,
-          completedPercent: 0
+          completedPercent: 0,
+          joinedDate: todayStr
         }
       },
       isGroupCompleted: false,
@@ -100,6 +101,8 @@ export async function createGroup(name: string, subjectId: string, ownerId: stri
  * Joins an existing group by ID
  */
 export async function joinGroup(groupId: string, userId: string, userName: string, userEmail: string): Promise<void> {
+  const todayStr = getVNDateString();
+
   // Try local first
   const localGroup = LocalDB.getGroup(groupId);
   if (localGroup) {
@@ -118,6 +121,86 @@ export async function joinGroup(groupId: string, userId: string, userName: strin
       localUser.groupId = groupId; // backward compatibility
       LocalDB.saveUser(localUser);
     }
+
+    // Save to local today's status as well
+    const statusKey = `grp_status_${groupId}_${todayStr}`;
+    const storedStatus = localStorage.getItem(statusKey);
+    let currentStatus: GroupDailyStatus = storedStatus ? JSON.parse(storedStatus) : {
+      id: todayStr,
+      date: todayStr,
+      memberProgress: {},
+      isGroupCompleted: false,
+      isStreakUpdated: false
+    };
+
+    // Calculate completion status of the joining user locally
+    let localIsCompleted = false;
+    let localCompletedPercent = 0;
+    const isEnglishGroup = localGroup.subjectId === "subj_eng" || localGroup.subjectId === "daily_random";
+    if (isEnglishGroup) {
+      const dailyProgId = `${userId}_daily_random_daily_random_set_${todayStr}`;
+      const dailyProg = LocalDB.getProgress(dailyProgId);
+      
+      const progressMap = LocalDB.getProgressMap();
+      const completedWordsSet = new Set<string>();
+      Object.values(progressMap).forEach((p) => {
+        if (p.uid === userId && p.date === todayStr && (p.subjectId === "subj_eng" || p.subjectId === "daily_random")) {
+          if (p.completedWords && Array.isArray(p.completedWords)) {
+            p.completedWords.forEach(wId => completedWordsSet.add(wId));
+          }
+        }
+      });
+      
+      const totalWordsCompletedToday = completedWordsSet.size;
+      localIsCompleted = !!(dailyProg && dailyProg.isCompleted) || totalWordsCompletedToday >= 20;
+      localCompletedPercent = localIsCompleted ? 100 : Math.min(100, Math.round((totalWordsCompletedToday / 20) * 100));
+    } else {
+      const setsForSubject = LocalDB.getVocabularySets().filter(s => s.subjectId === localGroup.subjectId);
+      if (setsForSubject.length > 0) {
+        const progressList = setsForSubject.map(set => {
+          const progId = `${userId}_${localGroup.subjectId}_${set.id}_${todayStr}`;
+          return LocalDB.getProgress(progId);
+        });
+        localIsCompleted = progressList.every(p => p && p.isCompleted);
+        const totalPercent = progressList.reduce((sum, p) => sum + (p ? p.completedPercent : 0), 0);
+        localCompletedPercent = Math.round(totalPercent / setsForSubject.length);
+      }
+    }
+
+    currentStatus.memberProgress[userId] = {
+      uid: userId,
+      displayName: userName,
+      email: userEmail,
+      isCompleted: localIsCompleted,
+      completedPercent: localCompletedPercent,
+      joinedDate: todayStr
+    };
+
+    // Calculate if group is completed today (ignoring anyone who joined today if they haven't completed)
+    const isGroupCompletedToday = localGroup.memberIds.every((mId) => {
+      const mStatus = currentStatus.memberProgress[mId];
+      if (!mStatus) return false;
+      if (mStatus.isCompleted) return true;
+      if (mStatus.joinedDate === todayStr) return true;
+      return false;
+    });
+
+    currentStatus.isGroupCompleted = isGroupCompletedToday;
+    localStorage.setItem(statusKey, JSON.stringify(currentStatus));
+
+    // Update streak locally immediately if the whole group completes today
+    if (isGroupCompletedToday && localGroup.lastStreakDate !== todayStr) {
+      localGroup.currentStreak += 1;
+      localGroup.longestStreak = Math.max(localGroup.longestStreak, localGroup.currentStreak);
+      localGroup.lastStreakDate = todayStr;
+      
+      const expectedTokens = getRestoreTokensForStreak(localGroup.currentStreak);
+      if (expectedTokens > localGroup.restoreTokensAvailable) {
+        localGroup.restoreTokensAvailable = expectedTokens;
+      }
+      LocalDB.saveGroup(localGroup);
+    }
+
     window.dispatchEvent(new Event("storage"));
   }
 
@@ -153,23 +236,121 @@ export async function joinGroup(groupId: string, userId: string, userName: strin
     });
 
     // Update today's daily status to include this member
-    const todayStr = getVNDateString();
     const dailyStatusRef = doc(db, `groups/${groupId}/dailyStatus`, todayStr);
     const dailyStatusSnap = await getDoc(dailyStatusRef);
+
+    // Calculate completion status of the joining user for Firestore
+    let isCompleted = false;
+    let completedPercent = 0;
+    const isEnglishGroup = groupData.subjectId === "subj_eng" || groupData.subjectId === "daily_random";
+    if (isEnglishGroup) {
+      const dailyProgId = `${userId}_daily_random_daily_random_set_${todayStr}`;
+      const dailyProg = LocalDB.getProgress(dailyProgId);
+      
+      const progressMap = LocalDB.getProgressMap();
+      const completedWordsSet = new Set<string>();
+      Object.values(progressMap).forEach((p) => {
+        if (p.uid === userId && p.date === todayStr && (p.subjectId === "subj_eng" || p.subjectId === "daily_random")) {
+          if (p.completedWords && Array.isArray(p.completedWords)) {
+            p.completedWords.forEach(wId => completedWordsSet.add(wId));
+          }
+        }
+      });
+      
+      const totalWordsCompletedToday = completedWordsSet.size;
+      isCompleted = !!(dailyProg && dailyProg.isCompleted) || totalWordsCompletedToday >= 20;
+      completedPercent = isCompleted ? 100 : Math.min(100, Math.round((totalWordsCompletedToday / 20) * 100));
+
+      if (!isCompleted && !dailyProg) {
+        try {
+          const progRef = doc(db, "progress", dailyProgId);
+          const progSnap = await getDoc(progRef);
+          if (progSnap.exists()) {
+            const progData = progSnap.data() as Progress;
+            if (progData.isCompleted) {
+              isCompleted = true;
+              completedPercent = 100;
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to fetch progress from Firestore on load sync:", e);
+        }
+      }
+    } else {
+      const setsForSubject = LocalDB.getVocabularySets().filter(s => s.subjectId === groupData.subjectId);
+      if (setsForSubject.length > 0) {
+        const progressList = await Promise.all(setsForSubject.map(async (set) => {
+          const progId = `${userId}_${groupData.subjectId}_${set.id}_${todayStr}`;
+          let prog = LocalDB.getProgress(progId);
+          if (!prog) {
+            try {
+              const progSnap = await getDoc(doc(db, "progress", progId));
+              if (progSnap.exists()) {
+                prog = progSnap.data() as Progress;
+              }
+            } catch (e) {}
+          }
+          return prog;
+        }));
+        isCompleted = progressList.every(p => p && p.isCompleted);
+        const totalPercent = progressList.reduce((sum, p) => sum + (p ? p.completedPercent : 0), 0);
+        completedPercent = Math.round(totalPercent / setsForSubject.length);
+      }
+    }
 
     const memberStatus: GroupMemberStatus = {
       uid: userId,
       displayName: userName,
       email: userEmail,
-      isCompleted: false,
-      completedPercent: 0
+      isCompleted,
+      completedPercent,
+      joinedDate: todayStr
     };
 
     if (dailyStatusSnap.exists()) {
-      await updateDoc(dailyStatusRef, {
-        [`memberProgress.${userId}`]: memberStatus
+      const currentStatus = dailyStatusSnap.data() as GroupDailyStatus;
+      const updatedMemberProgress = {
+        ...currentStatus.memberProgress,
+        [userId]: memberStatus
+      };
+
+      // Check if group is completed (ignoring members who joined today if they are not completed)
+      const isGroupCompleted = groupData.memberIds.concat([userId]).every((mId) => {
+        const mStatus = updatedMemberProgress[mId];
+        if (!mStatus) return false;
+        if (mStatus.isCompleted) return true;
+        if (mStatus.joinedDate === todayStr) return true;
+        return false;
       });
+
+      await updateDoc(dailyStatusRef, {
+        [`memberProgress.${userId}`]: memberStatus,
+        isGroupCompleted
+      });
+
+      // Update Group streak immediately in Firestore if completed
+      if (isGroupCompleted && groupData.lastStreakDate !== todayStr) {
+        const newStreak = groupData.currentStreak + 1;
+        const newLongest = Math.max(groupData.longestStreak, newStreak);
+        let newTokens = groupData.restoreTokensAvailable;
+        const expectedTokens = getRestoreTokensForStreak(newStreak);
+        if (expectedTokens > groupData.restoreTokensAvailable) {
+          newTokens = expectedTokens;
+        }
+
+        await updateDoc(groupRef, {
+          currentStreak: newStreak,
+          longestStreak: newLongest,
+          restoreTokensAvailable: newTokens,
+          lastStreakDate: todayStr
+        });
+      }
     } else {
+      // If daily status doesn't exist, we evaluate based on this joining member's completion status.
+      // Since they are the only member in the daily status doc initially, we use their completion status.
+      // But wait! If there are other members in the group who already completed, they aren't in this new doc yet.
+      // So let's start with isGroupCompleted as false, or check if group completed status can be computed.
+      // Normally, if dailyStatusSnap doesn't exist, nobody has completed or activeMemberIds has no progress yet.
       await setDoc(dailyStatusRef, {
         id: todayStr,
         date: todayStr,
@@ -356,17 +537,25 @@ export async function updateGroupMemberProgress(
       isStreakUpdated: false
     };
 
+    const existingStatus = currentStatus.memberProgress[userId];
+    const joinedDate = existingStatus?.joinedDate;
+
     currentStatus.memberProgress[userId] = {
       uid: userId,
       displayName: userName,
       email: userEmail,
       isCompleted: finalCompleted,
-      completedPercent: finalPercent
+      completedPercent: finalPercent,
+      ...(joinedDate ? { joinedDate } : {})
     };
 
-    const isGroupCompletedToday = localGroup.memberIds.every(
-      (mId) => currentStatus.memberProgress[mId]?.isCompleted === true
-    );
+    const isGroupCompletedToday = localGroup.memberIds.every((mId) => {
+      const mStatus = currentStatus.memberProgress[mId];
+      if (!mStatus) return false;
+      if (mStatus.isCompleted) return true;
+      if (mStatus.joinedDate === dateStr) return true;
+      return false;
+    });
     currentStatus.isGroupCompleted = isGroupCompletedToday;
 
     localStorage.setItem(statusKey, JSON.stringify(currentStatus));
@@ -391,12 +580,16 @@ export async function updateGroupMemberProgress(
     const dailyStatusRef = doc(db, `groups/${groupId}/dailyStatus`, dateStr);
     const dailyStatusSnap = await getDoc(dailyStatusRef);
 
+    const existingMemberStatus = dailyStatusSnap.exists() ? (dailyStatusSnap.data() as GroupDailyStatus).memberProgress?.[userId] : null;
+    const joinedDate = existingMemberStatus?.joinedDate;
+
     const memberStatus: GroupMemberStatus = {
       uid: userId,
       displayName: userName,
       email: userEmail,
       isCompleted: finalCompleted,
-      completedPercent: finalPercent
+      completedPercent: finalPercent,
+      ...(joinedDate ? { joinedDate } : {})
     };
 
     const groupRef = doc(db, "groups", groupId);
@@ -411,9 +604,13 @@ export async function updateGroupMemberProgress(
         [userId]: memberStatus
       };
 
-      const isGroupCompleted = activeMemberIds.every(
-        (mId) => updatedMemberProgress[mId]?.isCompleted === true
-      );
+      const isGroupCompleted = activeMemberIds.every((mId) => {
+        const mStatus = updatedMemberProgress[mId];
+        if (!mStatus) return false;
+        if (mStatus.isCompleted) return true;
+        if (mStatus.joinedDate === dateStr) return true;
+        return false;
+      });
 
       await updateDoc(dailyStatusRef, {
         [`memberProgress.${userId}`]: memberStatus,
@@ -438,9 +635,16 @@ export async function updateGroupMemberProgress(
         });
       }
     } else {
-      const isGroupCompleted = activeMemberIds.every(
-        (mId) => mId === userId ? finalCompleted : false
-      );
+      const updatedMemberProgress = {
+        [userId]: memberStatus
+      };
+      const isGroupCompleted = activeMemberIds.every((mId) => {
+        const mStatus = updatedMemberProgress[mId];
+        if (!mStatus) return false;
+        if (mStatus.isCompleted) return true;
+        if (mStatus.joinedDate === dateStr) return true;
+        return false;
+      });
 
       await setDoc(dailyStatusRef, {
         id: dateStr,
@@ -508,8 +712,36 @@ export async function evaluateGroupStreak(groupId: string, memberIds: string[]):
       // Check yesterday status locally
       const setsForSubject = LocalDB.getVocabularySets().filter(s => s.subjectId === localGroup.subjectId);
       let allCompletedYesterday = false;
-      if (setsForSubject.length > 0) {
-        allCompletedYesterday = memberIds.every(mId => {
+
+      // Filter members to evaluate locally
+      const statusKey = `grp_status_${groupId}_${yesterdayStr}`;
+      const storedStatus = localStorage.getItem(statusKey);
+      const yesterdayStatus: GroupDailyStatus | null = storedStatus ? JSON.parse(storedStatus) : null;
+
+      const membersToEvaluate = memberIds.filter(mId => {
+        if (yesterdayStatus) {
+          const mStatus = yesterdayStatus.memberProgress?.[mId];
+          if (!mStatus) return false; // Not in the group yesterday
+          if (mStatus.joinedDate === yesterdayStr) return false; // Exempted for their join date
+        } else {
+          // If no yesterday status document, check if they joined today or later
+          const todayStatusKey = `grp_status_${groupId}_${todayStr}`;
+          const todayStatusStored = localStorage.getItem(todayStatusKey);
+          if (todayStatusStored) {
+            const todayStatus = JSON.parse(todayStatusStored) as GroupDailyStatus;
+            const mStatus = todayStatus.memberProgress?.[mId];
+            if (mStatus && mStatus.joinedDate && mStatus.joinedDate > yesterdayStr) {
+              return false; // Joined after yesterday
+            }
+          }
+        }
+        return true;
+      });
+
+      if (membersToEvaluate.length === 0) {
+        allCompletedYesterday = true;
+      } else if (setsForSubject.length > 0) {
+        allCompletedYesterday = membersToEvaluate.every(mId => {
           const progressList = setsForSubject.map(set => {
             const progId = `${mId}_${localGroup.subjectId}_${set.id}_${yesterdayStr}`;
             return LocalDB.getProgress(progId);
@@ -572,14 +804,53 @@ export async function evaluateGroupStreak(groupId: string, memberIds: string[]):
 
     if (yesterdayStatusSnap.exists()) {
       const yesterdayStatus = yesterdayStatusSnap.data() as GroupDailyStatus;
-      allCompletedYesterday = memberIds.every(
-        (mId) => yesterdayStatus.memberProgress?.[mId]?.isCompleted === true
-      );
+      
+      const membersToEvaluate = memberIds.filter(mId => {
+        const mStatus = yesterdayStatus.memberProgress?.[mId];
+        if (!mStatus) return false; // Not in the group yesterday
+        if (mStatus.joinedDate === yesterdayStr) return false; // Exempted for their join date
+        return true;
+      });
+
+      if (membersToEvaluate.length === 0) {
+        allCompletedYesterday = true;
+      } else {
+        allCompletedYesterday = membersToEvaluate.every(
+          (mId) => yesterdayStatus.memberProgress?.[mId]?.isCompleted === true
+        );
+      }
     } else if (localGroup) {
       // Fallback to local computation
+      const statusKey = `grp_status_${groupId}_${yesterdayStr}`;
+      const storedStatus = localStorage.getItem(statusKey);
+      const yesterdayStatus: GroupDailyStatus | null = storedStatus ? JSON.parse(storedStatus) : null;
+
       const isEnglishGroup = localGroup.subjectId === "subj_eng" || localGroup.subjectId === "daily_random";
-      if (isEnglishGroup) {
-        allCompletedYesterday = memberIds.every(mId => {
+
+      const membersToEvaluate = memberIds.filter(mId => {
+        if (yesterdayStatus) {
+          const mStatus = yesterdayStatus.memberProgress?.[mId];
+          if (!mStatus) return false; // Not in the group yesterday
+          if (mStatus.joinedDate === yesterdayStr) return false; // Exempted for their join date
+        } else {
+          // If no yesterday status document, check if they joined today or later
+          const todayStatusKey = `grp_status_${groupId}_${todayStr}`;
+          const todayStatusStored = localStorage.getItem(todayStatusKey);
+          if (todayStatusStored) {
+            const todayStatus = JSON.parse(todayStatusStored) as GroupDailyStatus;
+            const mStatus = todayStatus.memberProgress?.[mId];
+            if (mStatus && mStatus.joinedDate && mStatus.joinedDate > yesterdayStr) {
+              return false; // Joined after yesterday
+            }
+          }
+        }
+        return true;
+      });
+
+      if (membersToEvaluate.length === 0) {
+        allCompletedYesterday = true;
+      } else if (isEnglishGroup) {
+        allCompletedYesterday = membersToEvaluate.every(mId => {
           const dailyProgId = `${mId}_daily_random_daily_random_set_${yesterdayStr}`;
           const dailyProg = LocalDB.getProgress(dailyProgId);
           return !!(dailyProg && dailyProg.isCompleted);
@@ -587,7 +858,7 @@ export async function evaluateGroupStreak(groupId: string, memberIds: string[]):
       } else {
         const setsForSubject = LocalDB.getVocabularySets().filter(s => s.subjectId === localGroup.subjectId);
         if (setsForSubject.length > 0) {
-          allCompletedYesterday = memberIds.every(mId => {
+          allCompletedYesterday = membersToEvaluate.every(mId => {
             const progressList = setsForSubject.map(set => {
               const progId = `${mId}_${localGroup.subjectId}_${set.id}_${yesterdayStr}`;
               return LocalDB.getProgress(progId);

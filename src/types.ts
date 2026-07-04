@@ -70,6 +70,7 @@ export interface GroupMemberStatus {
   email: string;
   isCompleted: boolean;
   completedPercent: number;
+  joinedDate?: string; // YYYY-MM-DD when member joined the group
 }
 
 export interface GroupDailyStatus {

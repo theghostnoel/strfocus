@@ -954,6 +954,7 @@ export default function GroupStreak({ user }: GroupStreakProps) {
                       const email = mProgress?.email || (mId === user.uid ? user.email : "");
                       const isCompleted = mProgress?.isCompleted || false;
                       const completedPercent = mProgress?.completedPercent || 0;
+                      const isNewMemberToday = mProgress?.joinedDate === todayStr;
 
                       return (
                         <div
@@ -982,6 +983,11 @@ export default function GroupStreak({ user }: GroupStreakProps) {
                                     <Shield className="h-2.5 w-2.5" /> Trưởng nhóm
                                   </span>
                                 )}
+                                {isNewMemberToday && (
+                                  <span className="bg-sky-50 text-sky-600 text-[9px] font-bold font-sans tracking-wide py-0.5 px-1.5 rounded-full border border-sky-100 uppercase">
+                                    Thành viên mới
+                                  </span>
+                                )}
                               </div>
                               <span className="text-[11px] text-slate-400 font-sans block">{email}</span>
                             </div>
@@ -992,7 +998,7 @@ export default function GroupStreak({ user }: GroupStreakProps) {
                             <div className="text-right flex-grow sm:flex-grow-0 sm:min-w-[140px]">
                               <div className="flex items-center justify-between text-xs font-sans mb-1">
                                 <span className={isCompleted ? "text-emerald-600 font-bold" : "text-slate-500 font-semibold"}>
-                                  {isCompleted ? "Hoàn thành 100%" : "Đang học"}
+                                  {isCompleted ? "Hoàn thành 100%" : isNewMemberToday ? "Miễn trừ hôm nay" : "Đang học"}
                                 </span>
                                 <span className="text-slate-500 font-bold">{completedPercent}%</span>
                               </div>
