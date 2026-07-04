@@ -103,7 +103,7 @@ export default function Navbar({ user, activeTab, setActiveTab, communitySetting
             </div>
 
             {/* Zalo / Discord Community Quick-link */}
-            {(communitySettings?.zaloUrl || "https://zalo.me/g/community") && (
+            {communitySettings?.zaloActive !== false && (communitySettings?.zaloUrl || "https://zalo.me/g/community") && (
               <a
                 href={communitySettings?.zaloUrl || "https://zalo.me/g/community"}
                 target="_blank"

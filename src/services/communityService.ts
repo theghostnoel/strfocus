@@ -23,12 +23,15 @@ export function subscribeToCommunitySettings(callback: (settings: CommunitySetti
           zaloUrl: data.zaloUrl !== undefined ? data.zaloUrl : localSettings.zaloUrl,
           zaloTitle: data.zaloTitle !== undefined ? data.zaloTitle : localSettings.zaloTitle,
           zaloDesc: data.zaloDesc !== undefined ? data.zaloDesc : localSettings.zaloDesc,
+          zaloActive: data.zaloActive !== undefined ? data.zaloActive : (localSettings.zaloActive !== undefined ? localSettings.zaloActive : true),
           discordUrl: data.discordUrl !== undefined ? data.discordUrl : localSettings.discordUrl,
           discordTitle: data.discordTitle !== undefined ? data.discordTitle : localSettings.discordTitle,
           discordDesc: data.discordDesc !== undefined ? data.discordDesc : localSettings.discordDesc,
+          discordActive: data.discordActive !== undefined ? data.discordActive : (localSettings.discordActive !== undefined ? localSettings.discordActive : true),
           facebookUrl: data.facebookUrl !== undefined ? data.facebookUrl : localSettings.facebookUrl,
           facebookTitle: data.facebookTitle !== undefined ? data.facebookTitle : localSettings.facebookTitle,
           facebookDesc: data.facebookDesc !== undefined ? data.facebookDesc : localSettings.facebookDesc,
+          facebookActive: data.facebookActive !== undefined ? data.facebookActive : (localSettings.facebookActive !== undefined ? localSettings.facebookActive : true),
         };
         LocalDB.saveCommunitySettings(merged);
         callback(merged);

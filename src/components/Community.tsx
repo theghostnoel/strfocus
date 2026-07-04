@@ -243,7 +243,8 @@ export default function Community({ user, communitySettings }: CommunityProps) {
       url: communitySettings?.zaloUrl || "https://zalo.me/g/community",
       color: "bg-cyan-200 text-slate-950 border-cyan-400",
       cta: "Tham gia nhóm Zalo",
-      icon: Users
+      icon: Users,
+      active: communitySettings?.zaloActive !== false
     },
     {
       title: communitySettings?.discordTitle || "Server Discord Học Tập",
@@ -251,7 +252,8 @@ export default function Community({ user, communitySettings }: CommunityProps) {
       url: communitySettings?.discordUrl || "https://discord.gg/english-streak",
       color: "bg-violet-200 text-slate-950 border-violet-400",
       cta: "Vào Server Discord",
-      icon: Disc
+      icon: Disc,
+      active: communitySettings?.discordActive !== false
     },
     {
       title: communitySettings?.facebookTitle || "Group Facebook Săn Học Bổng",
@@ -259,12 +261,13 @@ export default function Community({ user, communitySettings }: CommunityProps) {
       url: communitySettings?.facebookUrl || "https://facebook.com/groups/english-scholarship",
       color: "bg-pink-200 text-slate-950 border-pink-400",
       cta: "Gia nhập nhóm Facebook",
-      icon: Award
+      icon: Award,
+      active: communitySettings?.facebookActive !== false
     }
   ];
 
-  // Only display links that are NOT empty
-  const communityLinks = rawLinks.filter(link => link.url && link.url.trim() !== "");
+  // Only display links that are NOT empty and are active
+  const communityLinks = rawLinks.filter(link => link.active && link.url && link.url.trim() !== "");
   const hasSidebarLinks = communityLinks.length > 0;
 
   return (

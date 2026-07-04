@@ -104,10 +104,13 @@ export interface CommunitySettings {
   zaloUrl: string;
   zaloTitle: string;
   zaloDesc: string;
+  zaloActive?: boolean;
   discordUrl: string;
   discordTitle: string;
   discordDesc: string;
+  discordActive?: boolean;
   facebookUrl: string;
   facebookTitle: string;
   facebookDesc: string;
+  facebookActive?: boolean;
 }

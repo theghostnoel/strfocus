@@ -316,19 +316,24 @@ export async function updateProgress(
   // Update in matched group daily trackers
   for (const groupId of groupIds) {
     const localGroup = LocalDB.getGroup(groupId);
-    if (localGroup && localGroup.subjectId === subjectId) {
-      try {
-        await updateGroupMemberProgress(
-          groupId,
-          uid,
-          displayName,
-          email,
-          isCompleted,
-          completedPercent,
-          dateStr
-        );
-      } catch (error) {
-        console.warn(`updateGroupMemberProgress failed for group ${groupId}, processing locally:`, error);
+    if (localGroup) {
+      // If the studied set is the daily random set, it counts for English group (subj_eng)
+      const isDailyRandomForEnglishGroup = (setId === "daily_random_set" && (localGroup.subjectId === "subj_eng" || localGroup.subjectId === "daily_random"));
+      
+      if (localGroup.subjectId === subjectId || isDailyRandomForEnglishGroup) {
+        try {
+          await updateGroupMemberProgress(
+            groupId,
+            uid,
+            displayName,
+            email,
+            isCompleted,
+            completedPercent,
+            dateStr
+          );
+        } catch (error) {
+          console.warn(`updateGroupMemberProgress failed for group ${groupId}, processing locally:`, error);
+        }
       }
     }
   }

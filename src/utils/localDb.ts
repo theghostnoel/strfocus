@@ -331,12 +331,15 @@ export class LocalDB {
       zaloUrl: "https://zalo.me/g/community",
       zaloTitle: "Cộng Đồng Zalo",
       zaloDesc: "Nơi thảo luận, trao đổi các bài học tiếng Anh và tuyển thêm thành viên tham gia nhóm giữ chuỗi hàng ngày.",
+      zaloActive: true,
       discordUrl: "https://discord.gg/english-streak",
       discordTitle: "Server Discord Học Tập",
       discordDesc: "Tham gia phòng voice chat học tiếng Anh giao tiếp 24/7 cùng giáo viên bản xứ và các chiến thần giữ chuỗi.",
+      discordActive: true,
       facebookUrl: "https://facebook.com/groups/english-scholarship",
       facebookTitle: "Group Facebook Săn Học Bổng",
-      facebookDesc: "Chia sẻ tài liệu thi IELTS, TOEIC, bài tập ôn thi THPT Quốc gia cùng hàng chục ngàn học sinh toàn quốc."
+      facebookDesc: "Chia sẻ tài liệu thi IELTS, TOEIC, bài tập ôn thi THPT Quốc gia cùng hàng chục ngàn học sinh toàn quốc.",
+      facebookActive: true
     };
     return this.get<CommunitySettings>("local_community_settings", DEFAULT_COMMUNITY_SETTINGS);
   }

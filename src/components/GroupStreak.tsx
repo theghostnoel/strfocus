@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { AppUser, Group, GroupDailyStatus, GroupMemberStatus, Subject, Message } from "../types";
+import { AppUser, Group, GroupDailyStatus, GroupMemberStatus, Subject, Message, Progress } from "../types";
 import {
   createGroup,
   joinGroup,
@@ -7,7 +7,8 @@ import {
   subscribeToDailyStatus,
   evaluateGroupStreak,
   restoreGroupStreak,
-  getRestoreTokensForStreak
+  getRestoreTokensForStreak,
+  updateGroupMemberProgress
 } from "../services/groupService";
 import { subscribeToSubjects } from "../services/flashcardService";
 import { getVNDateString, getVNTimeUntilMidnight } from "../utils/timezone";
@@ -229,6 +230,86 @@ export default function GroupStreak({ user }: GroupStreakProps) {
       unsubscribeDaily();
     };
   }, [activeGroupId, todayStr]);
+
+  // Sync current user's today's study progress to Firestore dailyStatus on dashboard load/updates
+  useEffect(() => {
+    if (!user || !activeGroupId || !group) return;
+
+    const syncUserProgressToGroup = async () => {
+      const isEnglishGroup = group.subjectId === "subj_eng" || group.subjectId === "daily_random";
+      let isCompleted = false;
+      let completedPercent = 0;
+
+      if (isEnglishGroup) {
+        const dailyProgId = `${user.uid}_daily_random_daily_random_set_${todayStr}`;
+        const dailyProg = LocalDB.getProgress(dailyProgId);
+        
+        const progressMap = LocalDB.getProgressMap();
+        const completedWordsSet = new Set<string>();
+        Object.values(progressMap).forEach((p) => {
+          if (p.uid === user.uid && p.date === todayStr && (p.subjectId === "subj_eng" || p.subjectId === "daily_random")) {
+            if (p.completedWords && Array.isArray(p.completedWords)) {
+              p.completedWords.forEach(wId => completedWordsSet.add(wId));
+            }
+          }
+        });
+        
+        const totalWordsCompletedToday = completedWordsSet.size;
+        isCompleted = !!(dailyProg && dailyProg.isCompleted) || totalWordsCompletedToday >= 20;
+        completedPercent = isCompleted ? 100 : Math.min(100, Math.round((totalWordsCompletedToday / 20) * 100));
+
+        if (!isCompleted && !dailyProg) {
+          try {
+            const progRef = doc(db, "progress", dailyProgId);
+            const progSnap = await getDoc(progRef);
+            if (progSnap.exists()) {
+              const progData = progSnap.data() as Progress;
+              if (progData.isCompleted) {
+                isCompleted = true;
+                completedPercent = 100;
+              }
+            }
+          } catch (e) {
+            console.warn("Failed to fetch progress from Firestore on load sync:", e);
+          }
+        }
+      } else {
+        const setsForSubject = LocalDB.getVocabularySets().filter(s => s.subjectId === group.subjectId);
+        if (setsForSubject.length > 0) {
+          const progressList = setsForSubject.map(set => {
+            const progId = `${user.uid}_${group.subjectId}_${set.id}_${todayStr}`;
+            return LocalDB.getProgress(progId);
+          });
+          isCompleted = progressList.every(p => p && p.isCompleted);
+          const totalPercent = progressList.reduce((sum, p) => sum + (p ? p.completedPercent : 0), 0);
+          completedPercent = Math.round(totalPercent / setsForSubject.length);
+        }
+      }
+
+      const currentMemberStatus = dailyStatus?.memberProgress?.[user.uid];
+      if (
+        !currentMemberStatus || 
+        currentMemberStatus.isCompleted !== isCompleted || 
+        currentMemberStatus.completedPercent !== completedPercent
+      ) {
+        try {
+          await updateGroupMemberProgress(
+            activeGroupId,
+            user.uid,
+            user.displayName || "",
+            user.email || "",
+            isCompleted,
+            completedPercent,
+            todayStr
+          );
+        } catch (error) {
+          console.warn("Failed to auto-sync user progress to group daily status:", error);
+        }
+      }
+    };
+
+    syncUserProgressToGroup();
+  }, [user, activeGroupId, group, todayStr, dailyStatus]);
 
   // Check if current streak hits a milestone for celebration
   useEffect(() => {

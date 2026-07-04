@@ -236,6 +236,7 @@ export function subscribeToDailyStatus(groupId: string, dateStr: string, callbac
 
   const localGroup = LocalDB.getGroup(groupId);
   if (localGroup) {
+    const isEnglishGroup = localGroup.subjectId === "subj_eng" || localGroup.subjectId === "daily_random";
     const setsForSubject = LocalDB.getVocabularySets().filter(s => s.subjectId === localGroup.subjectId);
     localGroup.memberIds.forEach(mId => {
       const member = LocalDB.getUser(mId);
@@ -243,7 +244,24 @@ export function subscribeToDailyStatus(groupId: string, dateStr: string, callbac
         let isMemberCompleted = false;
         let memberCompletedPercent = 0;
 
-        if (setsForSubject.length > 0) {
+        if (isEnglishGroup) {
+          const dailyProgId = `${mId}_daily_random_daily_random_set_${dateStr}`;
+          const dailyProg = LocalDB.getProgress(dailyProgId);
+          
+          const progressMap = LocalDB.getProgressMap();
+          const completedWordsSet = new Set<string>();
+          Object.values(progressMap).forEach((p) => {
+            if (p.uid === mId && p.date === dateStr && (p.subjectId === "subj_eng" || p.subjectId === "daily_random")) {
+              if (Array.isArray(p.completedWords)) {
+                p.completedWords.forEach(wId => completedWordsSet.add(wId));
+              }
+            }
+          });
+          
+          const totalWordsCompletedToday = completedWordsSet.size;
+          isMemberCompleted = !!(dailyProg && dailyProg.isCompleted) || totalWordsCompletedToday >= 20;
+          memberCompletedPercent = isMemberCompleted ? 100 : Math.round((totalWordsCompletedToday / 20) * 100);
+        } else if (setsForSubject.length > 0) {
           const progressList = setsForSubject.map(set => {
             const progId = `${mId}_${localGroup.subjectId}_${set.id}_${dateStr}`;
             return LocalDB.getProgress(progId);
@@ -303,7 +321,30 @@ export async function updateGroupMemberProgress(
   dateStr: string
 ): Promise<void> {
   const localGroup = LocalDB.getGroup(groupId);
+  let finalCompleted = isCompleted;
+  let finalPercent = completedPercent;
+
   if (localGroup) {
+    const isEnglishGroup = localGroup.subjectId === "subj_eng" || localGroup.subjectId === "daily_random";
+    if (isEnglishGroup) {
+      const dailyProgId = `${userId}_daily_random_daily_random_set_${dateStr}`;
+      const dailyProg = LocalDB.getProgress(dailyProgId);
+      
+      const progressMap = LocalDB.getProgressMap();
+      const completedWordsSet = new Set<string>();
+      Object.values(progressMap).forEach((p) => {
+        if (p.uid === userId && p.date === dateStr && (p.subjectId === "subj_eng" || p.subjectId === "daily_random")) {
+          if (Array.isArray(p.completedWords)) {
+            p.completedWords.forEach(wId => completedWordsSet.add(wId));
+          }
+        }
+      });
+      
+      const totalWordsCompletedToday = completedWordsSet.size;
+      finalCompleted = !!(dailyProg && dailyProg.isCompleted) || totalWordsCompletedToday >= 20;
+      finalPercent = finalCompleted ? 100 : Math.round((totalWordsCompletedToday / 20) * 100);
+    }
+
     // Save to yesterday status/today status locally
     const statusKey = `grp_status_${groupId}_${dateStr}`;
     const storedStatus = localStorage.getItem(statusKey);
@@ -319,8 +360,8 @@ export async function updateGroupMemberProgress(
       uid: userId,
       displayName: userName,
       email: userEmail,
-      isCompleted,
-      completedPercent
+      isCompleted: finalCompleted,
+      completedPercent: finalPercent
     };
 
     currentStatus.isGroupCompleted = localGroup.memberIds.every(
@@ -339,8 +380,8 @@ export async function updateGroupMemberProgress(
       uid: userId,
       displayName: userName,
       email: userEmail,
-      isCompleted,
-      completedPercent
+      isCompleted: finalCompleted,
+      completedPercent: finalPercent
     };
 
     if (dailyStatusSnap.exists()) {
@@ -481,15 +522,24 @@ export async function evaluateGroupStreak(groupId: string, memberIds: string[]):
       );
     } else if (localGroup) {
       // Fallback to local computation
-      const setsForSubject = LocalDB.getVocabularySets().filter(s => s.subjectId === localGroup.subjectId);
-      if (setsForSubject.length > 0) {
+      const isEnglishGroup = localGroup.subjectId === "subj_eng" || localGroup.subjectId === "daily_random";
+      if (isEnglishGroup) {
         allCompletedYesterday = memberIds.every(mId => {
-          const progressList = setsForSubject.map(set => {
-            const progId = `${mId}_${localGroup.subjectId}_${set.id}_${yesterdayStr}`;
-            return LocalDB.getProgress(progId);
-          });
-          return progressList.every(p => p && p.isCompleted);
+          const dailyProgId = `${mId}_daily_random_daily_random_set_${yesterdayStr}`;
+          const dailyProg = LocalDB.getProgress(dailyProgId);
+          return !!(dailyProg && dailyProg.isCompleted);
         });
+      } else {
+        const setsForSubject = LocalDB.getVocabularySets().filter(s => s.subjectId === localGroup.subjectId);
+        if (setsForSubject.length > 0) {
+          allCompletedYesterday = memberIds.every(mId => {
+            const progressList = setsForSubject.map(set => {
+              const progId = `${mId}_${localGroup.subjectId}_${set.id}_${yesterdayStr}`;
+              return LocalDB.getProgress(progId);
+            });
+            return progressList.every(p => p && p.isCompleted);
+          });
+        }
       }
     }
 

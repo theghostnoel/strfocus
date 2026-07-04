@@ -205,9 +205,16 @@ export default function VocabularyList({ user, onSelectSet }: VocabularyListProp
     return { totalSets, completed, isCompletedAll };
   };
 
-  const dailyProgress = todayProgress["daily_random_set"];
-  const dailyCompletedCount = dailyProgress ? dailyProgress.completedWords.length : 0;
-  const isDailyCompleted = !!(dailyProgress && dailyProgress.isCompleted);
+  const completedWordsSet = new Set<string>();
+  Object.entries(todayProgress).forEach(([key, p]: [string, any]) => {
+    if (p && (p.subjectId === "subj_eng" || p.subjectId === "daily_random" || key === "daily_random_set")) {
+      if (Array.isArray(p.completedWords)) {
+        p.completedWords.forEach((wId: string) => completedWordsSet.add(wId));
+      }
+    }
+  });
+  const dailyCompletedCount = completedWordsSet.size;
+  const isDailyCompleted = dailyCompletedCount >= 20 || !!(todayProgress["daily_random_set"] && todayProgress["daily_random_set"].isCompleted);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">

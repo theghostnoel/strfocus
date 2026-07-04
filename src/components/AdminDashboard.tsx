@@ -74,24 +74,30 @@ export default function AdminDashboard({ user, communitySettings }: AdminDashboa
   const [zaloUrl, setZaloUrl] = useState("");
   const [zaloTitle, setZaloTitle] = useState("");
   const [zaloDesc, setZaloDesc] = useState("");
+  const [zaloActive, setZaloActive] = useState(true);
   const [discordUrl, setDiscordUrl] = useState("");
   const [discordTitle, setDiscordTitle] = useState("");
   const [discordDesc, setDiscordDesc] = useState("");
+  const [discordActive, setDiscordActive] = useState(true);
   const [facebookUrl, setFacebookUrl] = useState("");
   const [facebookTitle, setFacebookTitle] = useState("");
   const [facebookDesc, setFacebookDesc] = useState("");
+  const [facebookActive, setFacebookActive] = useState(true);
 
   useEffect(() => {
     if (communitySettings) {
       setZaloUrl(communitySettings.zaloUrl || "");
       setZaloTitle(communitySettings.zaloTitle || "");
       setZaloDesc(communitySettings.zaloDesc || "");
+      setZaloActive(communitySettings.zaloActive !== false);
       setDiscordUrl(communitySettings.discordUrl || "");
       setDiscordTitle(communitySettings.discordTitle || "");
       setDiscordDesc(communitySettings.discordDesc || "");
+      setDiscordActive(communitySettings.discordActive !== false);
       setFacebookUrl(communitySettings.facebookUrl || "");
       setFacebookTitle(communitySettings.facebookTitle || "");
       setFacebookDesc(communitySettings.facebookDesc || "");
+      setFacebookActive(communitySettings.facebookActive !== false);
     }
   }, [communitySettings]);
 
@@ -402,12 +408,15 @@ export default function AdminDashboard({ user, communitySettings }: AdminDashboa
         zaloUrl: zaloUrl.trim(),
         zaloTitle: zaloTitle.trim() || "Cộng Đồng Zalo",
         zaloDesc: zaloDesc.trim(),
+        zaloActive,
         discordUrl: discordUrl.trim(),
         discordTitle: discordTitle.trim() || "Server Discord Học Tập",
         discordDesc: discordDesc.trim(),
+        discordActive,
         facebookUrl: facebookUrl.trim(),
         facebookTitle: facebookTitle.trim() || "Group Facebook Săn Học Bổng",
-        facebookDesc: facebookDesc.trim()
+        facebookDesc: facebookDesc.trim(),
+        facebookActive
       };
 
       await updateCommunitySettings(updatedSettings);
@@ -1191,9 +1200,23 @@ export default function AdminDashboard({ user, communitySettings }: AdminDashboa
             <form onSubmit={handleUpdateCommunityLinks} className="space-y-8">
               {/* ZALO CONFIG */}
               <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4">
-                <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-                  <span className="w-2 h-2 bg-cyan-400 rounded-full" />
-                  <h4 className="font-bold text-sm text-white uppercase tracking-wider">Cộng đồng Zalo</h4>
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
+                    <h4 className="font-bold text-sm text-white uppercase tracking-wider">Cộng đồng Zalo</h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setZaloActive(!zaloActive)}
+                    className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-xl border-2 border-slate-950 shadow-[1.5px_1.5px_0px_0px_rgba(255,255,255,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all cursor-pointer flex items-center gap-1.5 ${
+                      zaloActive 
+                        ? "bg-emerald-400 text-slate-950" 
+                        : "bg-slate-800 text-slate-400 border-slate-700 shadow-none"
+                    }`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${zaloActive ? "bg-slate-950 animate-ping" : "bg-slate-500"}`} />
+                    {zaloActive ? "Đang Bật (Hiển thị)" : "Đang Tắt (Ẩn đi)"}
+                  </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -1231,9 +1254,23 @@ export default function AdminDashboard({ user, communitySettings }: AdminDashboa
 
               {/* DISCORD CONFIG */}
               <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4">
-                <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-                  <span className="w-2 h-2 bg-indigo-400 rounded-full" />
-                  <h4 className="font-bold text-sm text-white uppercase tracking-wider">Server Discord Học Tập</h4>
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse" />
+                    <h4 className="font-bold text-sm text-white uppercase tracking-wider">Server Discord Học Tập</h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDiscordActive(!discordActive)}
+                    className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-xl border-2 border-slate-950 shadow-[1.5px_1.5px_0px_0px_rgba(255,255,255,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all cursor-pointer flex items-center gap-1.5 ${
+                      discordActive 
+                        ? "bg-emerald-400 text-slate-950" 
+                        : "bg-slate-800 text-slate-400 border-slate-700 shadow-none"
+                    }`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${discordActive ? "bg-slate-950 animate-ping" : "bg-slate-500"}`} />
+                    {discordActive ? "Đang Bật (Hiển thị)" : "Đang Tắt (Ẩn đi)"}
+                  </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -1271,9 +1308,23 @@ export default function AdminDashboard({ user, communitySettings }: AdminDashboa
 
               {/* FACEBOOK CONFIG */}
               <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4">
-                <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-                  <span className="w-2 h-2 bg-pink-400 rounded-full" />
-                  <h4 className="font-bold text-sm text-white uppercase tracking-wider">Group Facebook</h4>
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" />
+                    <h4 className="font-bold text-sm text-white uppercase tracking-wider">Group Facebook</h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFacebookActive(!facebookActive)}
+                    className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-xl border-2 border-slate-950 shadow-[1.5px_1.5px_0px_0px_rgba(255,255,255,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all cursor-pointer flex items-center gap-1.5 ${
+                      facebookActive 
+                        ? "bg-emerald-400 text-slate-950" 
+                        : "bg-slate-800 text-slate-400 border-slate-700 shadow-none"
+                    }`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${facebookActive ? "bg-slate-950 animate-ping" : "bg-slate-500"}`} />
+                    {facebookActive ? "Đang Bật (Hiển thị)" : "Đang Tắt (Ẩn đi)"}
+                  </button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
