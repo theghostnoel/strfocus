@@ -364,11 +364,26 @@ export async function updateGroupMemberProgress(
       completedPercent: finalPercent
     };
 
-    currentStatus.isGroupCompleted = localGroup.memberIds.every(
+    const isGroupCompletedToday = localGroup.memberIds.every(
       (mId) => currentStatus.memberProgress[mId]?.isCompleted === true
     );
+    currentStatus.isGroupCompleted = isGroupCompletedToday;
 
     localStorage.setItem(statusKey, JSON.stringify(currentStatus));
+
+    // Update streak locally immediately if the whole group completes today
+    if (isGroupCompletedToday && localGroup.lastStreakDate !== dateStr) {
+      localGroup.currentStreak += 1;
+      localGroup.longestStreak = Math.max(localGroup.longestStreak, localGroup.currentStreak);
+      localGroup.lastStreakDate = dateStr;
+      
+      const expectedTokens = getRestoreTokensForStreak(localGroup.currentStreak);
+      if (expectedTokens > localGroup.restoreTokensAvailable) {
+        localGroup.restoreTokensAvailable = expectedTokens;
+      }
+      LocalDB.saveGroup(localGroup);
+    }
+
     window.dispatchEvent(new Event("storage"));
   }
 
@@ -384,17 +399,17 @@ export async function updateGroupMemberProgress(
       completedPercent: finalPercent
     };
 
+    const groupRef = doc(db, "groups", groupId);
+    const groupSnap = await getDoc(groupRef);
+    const groupData = groupSnap.data() as Group;
+    const activeMemberIds = groupData?.memberIds || [userId];
+
     if (dailyStatusSnap.exists()) {
       const currentStatus = dailyStatusSnap.data() as GroupDailyStatus;
       const updatedMemberProgress = {
         ...currentStatus.memberProgress,
         [userId]: memberStatus
       };
-
-      // Check if ALL current members have isCompleted = true
-      const groupSnap = await getDoc(doc(db, "groups", groupId));
-      const groupData = groupSnap.data() as Group;
-      const activeMemberIds = groupData?.memberIds || [userId];
 
       const isGroupCompleted = activeMemberIds.every(
         (mId) => updatedMemberProgress[mId]?.isCompleted === true
@@ -404,16 +419,56 @@ export async function updateGroupMemberProgress(
         [`memberProgress.${userId}`]: memberStatus,
         isGroupCompleted
       });
+
+      // Update Group streak immediately in Firestore if completed
+      if (isGroupCompleted && groupData && groupData.lastStreakDate !== dateStr) {
+        const newStreak = groupData.currentStreak + 1;
+        const newLongest = Math.max(groupData.longestStreak, newStreak);
+        let newTokens = groupData.restoreTokensAvailable;
+        const expectedTokens = getRestoreTokensForStreak(newStreak);
+        if (expectedTokens > groupData.restoreTokensAvailable) {
+          newTokens = expectedTokens;
+        }
+
+        await updateDoc(groupRef, {
+          currentStreak: newStreak,
+          longestStreak: newLongest,
+          restoreTokensAvailable: newTokens,
+          lastStreakDate: dateStr
+        });
+      }
     } else {
+      const isGroupCompleted = activeMemberIds.every(
+        (mId) => mId === userId ? finalCompleted : false
+      );
+
       await setDoc(dailyStatusRef, {
         id: dateStr,
         date: dateStr,
         memberProgress: {
           [userId]: memberStatus
         },
-        isGroupCompleted: isCompleted,
+        isGroupCompleted,
         isStreakUpdated: false
       });
+
+      // Update Group streak immediately in Firestore if completed
+      if (isGroupCompleted && groupData && groupData.lastStreakDate !== dateStr) {
+        const newStreak = groupData.currentStreak + 1;
+        const newLongest = Math.max(groupData.longestStreak, newStreak);
+        let newTokens = groupData.restoreTokensAvailable;
+        const expectedTokens = getRestoreTokensForStreak(newStreak);
+        if (expectedTokens > groupData.restoreTokensAvailable) {
+          newTokens = expectedTokens;
+        }
+
+        await updateDoc(groupRef, {
+          currentStreak: newStreak,
+          longestStreak: newLongest,
+          restoreTokensAvailable: newTokens,
+          lastStreakDate: dateStr
+        });
+      }
     }
   } catch (error) {
     console.warn("Firestore updateGroupMemberProgress failed, running locally:", error);
